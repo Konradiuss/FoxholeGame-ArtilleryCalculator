@@ -631,26 +631,69 @@ const ArtilleryGroupCalculator = () => {
   const [centralDistance, setCentralDistance] = useState('100');
   const [centralAzimuth, setCentralAzimuth] = useState('0');
   const [artillery, setArtillery] = useState([]);
-  const [selectedArtillery] = useState(null);
-  const gridSize = 40;
+  const GRID_SIZE_X = 50;
+  const GRID_SIZE_Y = 20;
+  const CELL_SIZE = 1;
   const [draggingArt, setDraggingArt] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [lastClickTime, setLastClickTime] = useState(0);
+  const [lastClickPosition, setLastClickPosition] = useState(null);
 
   // Функция для добавления артиллерии по клику на сетку
   const handleGridClick = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    // Используем clientX/Y для точного определения позиции
-    const x = (e.clientX - rect.left) / (rect.width / gridSize);
-    const y = (e.clientY - rect.top) / (rect.height / gridSize);
+    const svgWidth = rect.width;
+    const svgHeight = rect.height;
 
-    const newArtillery = {
-      id: Date.now(),
-      x: Math.round(x), // Округляем для привязки к сетке
-      y: Math.round(y),
-      isCentral: artillery.length === 0,
-      correction: { distance: 0, azimuth: 0 }
-    };
-    setArtillery([...artillery, newArtillery]);
+    // Получаем относительные координаты в пределах SVG
+    const x = ((e.clientX - rect.left) / svgWidth) * GRID_SIZE_X;
+    const y = ((e.clientY - rect.top) / svgHeight) * GRID_SIZE_Y;
+
+    // Округляем координаты до целых чисел
+    const roundedX = Math.round(x);
+    const roundedY = Math.round(y);
+
+    if (roundedX < 0 || roundedX > GRID_SIZE_X || roundedY < 0 || roundedY > GRID_SIZE_Y) {
+      return;
+    }
+
+    const currentTime = new Date().getTime();
+
+    // Проверяем двойной клик
+    if (lastClickPosition &&
+      lastClickPosition.x === roundedX &&
+      lastClickPosition.y === roundedY &&
+      currentTime - lastClickTime < 300) { // 300ms для двойного клика
+
+      // Проверяем, кликнули ли мы по существующей артиллерии
+      const existingArtIndex = artillery.findIndex(
+        art => Math.abs(art.x - roundedX) < 1 && Math.abs(art.y - roundedY) < 1
+      );
+
+      if (existingArtIndex !== -1) {
+        // Если это центральная артиллерия, не удаляем её
+        if (artillery[existingArtIndex].isCentral) return;
+        setArtillery(artillery.filter((_, index) => index !== existingArtIndex));
+      } else {
+        // Добавляем новую артиллерию
+        const newArtillery = {
+          id: Date.now(),
+          x: roundedX,
+          y: roundedY,
+          isCentral: artillery.length === 0,
+          correction: { distance: 0, azimuth: 0 }
+        };
+        setArtillery([...artillery, newArtillery]);
+      }
+
+      // Сбрасываем состояние двойного клика
+      setLastClickTime(0);
+      setLastClickPosition(null);
+    } else {
+      // Сохраняем информацию о клике для проверки двойного клика
+      setLastClickTime(currentTime);
+      setLastClickPosition({ x: roundedX, y: roundedY });
+    }
   };
 
   const handleDragStart = (e, art) => {
@@ -663,13 +706,19 @@ const ArtilleryGroupCalculator = () => {
     if (!isDragging || !draggingArt) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / (rect.width / gridSize);
-    const y = (e.clientY - rect.top) / (rect.height / gridSize);
+    const svgWidth = rect.width;
+    const svgHeight = rect.height;
 
-    if (x >= 0 && x <= gridSize && y >= 0 && y <= gridSize) {
+    const x = ((e.clientX - rect.left) / svgWidth) * GRID_SIZE_X;
+    const y = ((e.clientY - rect.top) / svgHeight) * GRID_SIZE_Y;
+
+    const roundedX = Math.round(x);
+    const roundedY = Math.round(y);
+
+    if (roundedX >= 0 && roundedX <= GRID_SIZE_X && roundedY >= 0 && roundedY <= GRID_SIZE_Y) {
       setArtillery(artillery.map(art =>
         art.id === draggingArt.id
-          ? { ...art, x: Math.round(x), y: Math.round(y) }
+          ? { ...art, x: roundedX, y: roundedY }
           : art
       ));
     }
@@ -680,9 +729,26 @@ const ArtilleryGroupCalculator = () => {
     setDraggingArt(null);
   };
 
+  const getArtilleryNumber = (artillery, currentIndex) => {
+    // Если это центральная артиллерия, всегда возвращаем 1
+    if (artillery[currentIndex].isCentral) return 1;
+  
+    // Подсчитываем, какой это по счету элемент (не центральный)
+    let nonCentralCount = 0;
+    for (let i = 0; i < currentIndex; i++) {
+      if (!artillery[i].isCentral) {
+        nonCentralCount++;
+      }
+    }
+  
+    // Возвращаем номер: количество не центральных элементов до текущего + 2
+    // (+2 потому что центральная арта занимает номер 1)
+    return nonCentralCount + 2;
+  };
+
   const calculateDistance = (art1, art2) => {
-    const dx = art1.x - art2.x;
-    const dy = art1.y - art2.y;
+    const dx = (art1.x - art2.x) * CELL_SIZE;
+    const dy = (art1.y - art2.y) * CELL_SIZE;
     return Math.round(Math.sqrt(dx * dx + dy * dy));
   };
 
@@ -727,11 +793,13 @@ const ArtilleryGroupCalculator = () => {
 
   return (
     <div className="space-y-4 text-[#8B7355]">
-      <div className="p-4 bg-[#4A3C2E] rounded-lg border border-[#6B4423]">
+      {/* Добавляем подсказку первым элементом */}
+      <div className="p-4 bg-[#4A3C2E] rounded-lg border border-[#6B4423] mb-4">
         <p className="text-sm">
-          1. Установите параметры стрельбы для центральной артиллерии<br />
-          2. Кликните по сетке для размещения артиллерии (первая будет центральной)<br />
-          3. Нажмите "Рассчитать поправки" для получения корректировок
+          1. Дважды кликните по пустой клетке, чтобы разместить артиллерию<br />
+          2. Дважды кликните по существующей артиллерии, чтобы убрать её<br />
+          3. Центральную артиллерию (красную) можно только перемещать<br />
+          4. Перетащите артиллерию, чтобы изменить её позицию
         </p>
       </div>
 
@@ -756,78 +824,222 @@ const ArtilleryGroupCalculator = () => {
         </div>
       </div>
 
-      {/* Сетка для размещения артиллерии */}
-      <div className="relative w-full h-[400px] bg-[#2E2420] border border-[#4A3C2E] rounded">
+      {/* Затем идет сетка */}
+      <div className="relative w-full h-[300px] bg-[#2E2420] border border-[#4A3C2E] rounded overflow-hidden select-none">
         <svg
-          viewBox={`0 0 ${gridSize} ${gridSize}`}
-          className="w-full h-full"
+          viewBox={`0 0 ${GRID_SIZE_X} ${GRID_SIZE_Y}`}
+          className="w-full h-full cursor-crosshair"
           onClick={handleGridClick}
           onMouseMove={handleDrag}
           onMouseUp={handleDragEnd}
           onMouseLeave={handleDragEnd}
         >
-          {/* Существующая сетка */}
-          {[...Array(gridSize)].map((_, i) => (
-            <React.Fragment key={i}>
-              <line x1={i} y1="0" x2={i} y2={gridSize} stroke="#4A3C2E" strokeWidth="0.1" />
-              <line x1="0" y1={i} x2={gridSize} y2={i} stroke="#4A3C2E" strokeWidth="0.1" />
-            </React.Fragment>
+          {/* Фон */}
+          <rect
+            x="0"
+            y="0"
+            width={GRID_SIZE_X}
+            height={GRID_SIZE_Y}
+            fill="#2E2420"
+          />
+
+          {/* Основные линии сетки (каждые 5 метров) */}
+          {[...Array(Math.floor(GRID_SIZE_X / 5) + 1)].map((_, i) => (
+            <g key={`v-major-${i}`}>
+              <line
+                x1={i * 5}
+                y1="0"
+                x2={i * 5}
+                y2={GRID_SIZE_Y}
+                stroke="#4A3C2E"
+                strokeWidth="0.15"
+              />
+              {/* Метки расстояния по X */}
+              <text
+                x={i * 5}
+                y={GRID_SIZE_Y - 0.3}
+                fontSize="0.8"
+                fill="#8B7355"
+                textAnchor="middle"
+              >
+                {i * 5}
+              </text>
+            </g>
+          ))}
+          {[...Array(Math.floor(GRID_SIZE_Y / 5) + 1)].map((_, i) => (
+            <g key={`h-major-${i}`}>
+              <line
+                x1="0"
+                y1={i * 5}
+                x2={GRID_SIZE_X}
+                y2={i * 5}
+                stroke="#4A3C2E"
+                strokeWidth="0.15"
+              />
+              {/* Метки расстояния по Y */}
+              <text
+                x="0.5"
+                y={i * 5 + 0.3}
+                fontSize="0.8"
+                fill="#8B7355"
+              >
+                {i * 5}
+              </text>
+            </g>
+          ))}
+
+          {/* Вспомогательные линии сетки (каждый метр) */}
+          {[...Array(GRID_SIZE_X + 1)].map((_, i) => (
+            <line
+              key={`v-${i}`}
+              x1={i}
+              y1="0"
+              x2={i}
+              y2={GRID_SIZE_Y}
+              stroke="#4A3C2E"
+              strokeWidth="0.05"
+              strokeOpacity="0.3"
+            />
+          ))}
+          {[...Array(GRID_SIZE_Y + 1)].map((_, i) => (
+            <line
+              key={`h-${i}`}
+              x1="0"
+              y1={i}
+              x2={GRID_SIZE_X}
+              y2={i}
+              stroke="#4A3C2E"
+              strokeWidth="0.05"
+              strokeOpacity="0.3"
+            />
           ))}
 
           {/* Линии между артиллерией */}
           {artillery.map((art1, i) =>
-            artillery.slice(i + 1).map(art2 => (
-              <g key={`${art1.id}-${art2.id}`}>
-                <line
-                  x1={art1.x}
-                  y1={art1.y}
-                  x2={art2.x}
-                  y2={art2.y}
-                  stroke="#4A3C2E"
-                  strokeWidth="0.1"
-                  strokeDasharray="0.5"
-                />
-                <text
-                  x={(art1.x + art2.x) / 2}
-                  y={(art1.y + art2.y) / 2 - 0.5}
-                  fontSize="1.2"
-                  fill="#8B7355"
-                  textAnchor="middle"
-                >
-                  {calculateDistance(art1, art2)}м
-                </text>
-              </g>
-            ))
+            artillery.slice(i + 1).map(art2 => {
+              const distance = calculateDistance(art1, art2);
+              const midX = (art1.x + art2.x) / 2;
+              const midY = (art1.y + art2.y) / 2;
+              const angle = Math.atan2(art2.y - art1.y, art2.x - art1.x);
+
+              // Смещение для текста
+              const labelOffset = 0.7;
+              const textX = midX + Math.sin(angle) * labelOffset;
+              const textY = midY - Math.cos(angle) * labelOffset;
+
+              return (
+                <g key={`${art1.id}-${art2.id}`}>
+                  <line
+                    x1={art1.x}
+                    y1={art1.y}
+                    x2={art2.x}
+                    y2={art2.y}
+                    stroke="#4A3C2E"
+                    strokeWidth="0.1"
+                    strokeDasharray="0.3"
+                  />
+                  {/* Фон для текста */}
+                  <rect
+                    x={textX - 2}
+                    y={textY - 0.7}
+                    width="4"
+                    height="1.4"
+                    fill="#2E2420"
+                    fillOpacity="0.9"
+                    rx="0.2"
+                  />
+                  <text
+                    x={textX}
+                    y={textY}
+                    fontSize="1.2"
+                    fill="#8B7355"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                  >
+                    {distance}м
+                  </text>
+                </g>
+              );
+            })
           )}
 
-          {/* Артиллерия с поддержкой перетаскивания */}
-          {artillery.map((art) => (
-            <g
-              key={art.id}
-              transform={`translate(${art.x} ${art.y})`}
-              onMouseDown={(e) => handleDragStart(e, art)}
-              style={{ cursor: 'move' }}
-            >
-              <circle
-                r="0.8"
-                fill={art.isCentral ? "#FF4444" : "#6B4423"}
-                stroke="#4A3C2E"
-                strokeWidth="0.2"
-              />
-              {art === selectedArtillery && (
+          {/* Артиллерийские позиции */}
+          {artillery.map((art, index) => {
+            const artNumber = getArtilleryNumber(artillery, index);
+            return (
+              <g
+                key={art.id}
+                transform={`translate(${art.x} ${art.y})`}
+                onMouseDown={(e) => handleDragStart(e, art)}
+                style={{ cursor: 'move' }}
+              >
+                {/* Подсветка точки */}
+                <circle
+                  r="1"
+                  fill="#2E2420"
+                  stroke="#4A3C2E"
+                  strokeWidth="0.2"
+                />
+                {/* Сама точка */}
+                <circle
+                  r="0.7"
+                  fill={art.isCentral ? "#FF4444" : "#6B4423"}
+                  stroke="#4A3C2E"
+                  strokeWidth="0.15"
+                />
+                {/* Номер артиллерии */}
                 <text
-                  x="1"
-                  y="-0.5"
-                  fontSize="2"
-                  fill="#8B7355"
+                  x="0"
+                  y="0.4"  // Изменено с -1.5 на 0.4 для центрирования внутри круга
+                  fontSize="1"  // Уменьшил размер для лучшего размещения
+                  fill="#FFFFFF"  // Изменил цвет на белый для лучшей видимости
+                  textAnchor="middle"
+                  dominantBaseline="middle"
                 >
-                  {art.correction.distance}м / {art.correction.azimuth}°
+                  {artNumber}
                 </text>
-              )}
-            </g>
-          ))}
+
+                {/* Информация о поправках */}
+                {!art.isCentral && art.correction && (
+                  <g>
+                    <rect
+                      x="1"
+                      y="-1.8"
+                      width="7"
+                      height="3.6"
+                      fill="#2E2420"
+                      fillOpacity="0.9"
+                      rx="0.3"
+                    />
+                    <text
+                      x="1.2"
+                      y="-0.6"
+                      fontSize="1.1"
+                      fill="#8B7355"
+                    >
+                      {art.correction.distance > 0 ? "+" : ""}{art.correction.distance}м
+                    </text>
+                    <text
+                      x="1.2"
+                      y="0.9"
+                      fontSize="1.1"
+                      fill="#8B7355"
+                    >
+                      {art.correction.azimuth > 0 ? "+" : ""}{art.correction.azimuth}°
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
         </svg>
+
+        {/* Подсказка по масштабу */}
+        <div className="absolute bottom-1 left-1 text-xs text-[#8B7355] bg-[#2E2420] px-2 py-1 rounded opacity-80">
+          1 клетка = 1 метр
+        </div>
       </div>
+
 
       <button
         onClick={calculateCorrections}
@@ -841,18 +1053,21 @@ const ArtilleryGroupCalculator = () => {
         <div className="mt-4 p-4 bg-[#2E2420] rounded-lg border border-[#4A3C2E]">
           <h3 className="font-medium mb-2">Поправки для артиллерии:</h3>
           <div className="space-y-2">
-            {artillery.map((art, index) => (
-              <div key={art.id} className="flex justify-between items-center">
-                <span>
-                  Арта {index + 1} {art.isCentral && "(Центральная)"}:
-                </span>
-                <span>
-                  {art.isCentral ? "Без поправок" :
-                    `Дист: ${art.correction.distance > 0 ? "+" : ""}${art.correction.distance}м, 
-                     Азимут: ${art.correction.azimuth > 0 ? "+" : ""}${art.correction.azimuth}°`}
-                </span>
-              </div>
-            ))}
+            {artillery.map((art, index) => {
+              const artNumber = getArtilleryNumber(artillery, index);
+              return (
+                <div key={art.id} className="flex justify-between items-center">
+                  <span>
+                    Арта #{artNumber} {art.isCentral && "(Центральная)"}:
+                  </span>
+                  <span>
+                    {art.isCentral ? "Без поправок" :
+                      `Дист: ${art.correction.distance > 0 ? "+" : ""}${art.correction.distance}м, 
+                 Азимут: ${art.correction.azimuth > 0 ? "+" : ""}${art.correction.azimuth}°`}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
