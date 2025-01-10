@@ -641,41 +641,43 @@ const ArtilleryGroupCalculator = () => {
 
   // Функция для добавления артиллерии по клику на сетку
   const handleGridClick = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const svgWidth = rect.width;
-    const svgHeight = rect.height;
+    const svg = e.currentTarget;
 
-    // Получаем относительные координаты в пределах SVG
-    const x = ((e.clientX - rect.left) / svgWidth) * GRID_SIZE_X;
-    const y = ((e.clientY - rect.top) / svgHeight) * GRID_SIZE_Y;
+    // Создаем точку в координатах клиента (экрана)
+    const pt = new DOMPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
 
-    // Округляем координаты до целых чисел
-    const roundedX = Math.round(x);
-    const roundedY = Math.round(y);
+    // Получаем матрицу преобразования из координат экрана в координаты SVG
+    const svgMatrix = svg.getScreenCTM().inverse();
 
+    // Преобразуем координаты клика в координаты SVG
+    const svgPoint = pt.matrixTransform(svgMatrix);
+
+    // Округляем до целых координат
+    const roundedX = Math.round(svgPoint.x);
+    const roundedY = Math.round(svgPoint.y);
+
+    // Проверяем границы
     if (roundedX < 0 || roundedX > GRID_SIZE_X || roundedY < 0 || roundedY > GRID_SIZE_Y) {
       return;
     }
 
     const currentTime = new Date().getTime();
 
-    // Проверяем двойной клик
     if (lastClickPosition &&
       lastClickPosition.x === roundedX &&
       lastClickPosition.y === roundedY &&
-      currentTime - lastClickTime < 300) { // 300ms для двойного клика
+      currentTime - lastClickTime < 300) {
 
-      // Проверяем, кликнули ли мы по существующей артиллерии
       const existingArtIndex = artillery.findIndex(
         art => Math.abs(art.x - roundedX) < 1 && Math.abs(art.y - roundedY) < 1
       );
 
       if (existingArtIndex !== -1) {
-        // Если это центральная артиллерия, не удаляем её
         if (artillery[existingArtIndex].isCentral) return;
         setArtillery(artillery.filter((_, index) => index !== existingArtIndex));
       } else {
-        // Добавляем новую артиллерию
         const newArtillery = {
           id: Date.now(),
           x: roundedX,
@@ -686,11 +688,9 @@ const ArtilleryGroupCalculator = () => {
         setArtillery([...artillery, newArtillery]);
       }
 
-      // Сбрасываем состояние двойного клика
       setLastClickTime(0);
       setLastClickPosition(null);
     } else {
-      // Сохраняем информацию о клике для проверки двойного клика
       setLastClickTime(currentTime);
       setLastClickPosition({ x: roundedX, y: roundedY });
     }
@@ -704,17 +704,18 @@ const ArtilleryGroupCalculator = () => {
 
   const handleDrag = (e) => {
     if (!isDragging || !draggingArt) return;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const svgWidth = rect.width;
-    const svgHeight = rect.height;
-
-    const x = ((e.clientX - rect.left) / svgWidth) * GRID_SIZE_X;
-    const y = ((e.clientY - rect.top) / svgHeight) * GRID_SIZE_Y;
-
-    const roundedX = Math.round(x);
-    const roundedY = Math.round(y);
-
+  
+    const svg = e.currentTarget;
+    const pt = new DOMPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    
+    const svgMatrix = svg.getScreenCTM().inverse();
+    const svgPoint = pt.matrixTransform(svgMatrix);
+    
+    const roundedX = Math.round(svgPoint.x);
+    const roundedY = Math.round(svgPoint.y);
+  
     if (roundedX >= 0 && roundedX <= GRID_SIZE_X && roundedY >= 0 && roundedY <= GRID_SIZE_Y) {
       setArtillery(artillery.map(art =>
         art.id === draggingArt.id
@@ -732,7 +733,7 @@ const ArtilleryGroupCalculator = () => {
   const getArtilleryNumber = (artillery, currentIndex) => {
     // Если это центральная артиллерия, всегда возвращаем 1
     if (artillery[currentIndex].isCentral) return 1;
-  
+
     // Подсчитываем, какой это по счету элемент (не центральный)
     let nonCentralCount = 0;
     for (let i = 0; i < currentIndex; i++) {
@@ -740,7 +741,7 @@ const ArtilleryGroupCalculator = () => {
         nonCentralCount++;
       }
     }
-  
+
     // Возвращаем номер: количество не центральных элементов до текущего + 2
     // (+2 потому что центральная арта занимает номер 1)
     return nonCentralCount + 2;
