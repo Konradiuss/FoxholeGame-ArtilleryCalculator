@@ -6,9 +6,9 @@ function App() {
       {/* Фоновая анимация */}
       <div className="fixed inset-0 z-0 overflow-hidden">
         <img 
-          src="/bulletfall.gif" 
+          src="/ammolay1.gif" 
           alt="" 
-          className="w-full h-full object-cover opacity-70" // уменьшил прозрачность для темного фона
+          className="w-full h-full object-cover opacity-70"
         />
       </div>
       

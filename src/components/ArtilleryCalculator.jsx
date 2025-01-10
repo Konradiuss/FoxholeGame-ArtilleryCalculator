@@ -257,6 +257,7 @@ const TriangulationMap = ({
   targetAzimuth,
   impactDistance,
   impactAzimuth,
+  windDirection, // новый параметр
   result
 }) => {
   // Преобразуем координаты в декартовы
@@ -306,6 +307,37 @@ const TriangulationMap = ({
       {/* Основа карты */}
       <circle cx="100" cy="100" r="90" fill="none" stroke="#4A3C2E" strokeWidth="1" />
       <circle cx="100" cy="100" r="45" fill="none" stroke="#4A3C2E" strokeWidth="0.5" strokeDasharray="2" />
+
+      {/* Направление ветра - новый элемент */}
+      <g transform={`rotate(${windDirection} 100 100)`}>
+        <line 
+          x1="100" 
+          y1="100" 
+          x2="100" 
+          y2="70"
+          stroke="#4682B4" 
+          strokeWidth="2" 
+          strokeDasharray="4"
+          markerEnd="url(#arrowhead)" 
+        />
+      </g>
+
+      {/* Добавляем определение маркера для стрелки */}
+      <defs>
+        <marker 
+          id="arrowhead" 
+          markerWidth="10" 
+          markerHeight="7"
+          refX="9" 
+          refY="3.5" 
+          orient="auto"
+        >
+          <polygon 
+            points="0 0, 10 3.5, 0 7" 
+            fill="#4682B4"
+          />
+        </marker>
+      </defs>
 
       {/* Линии от наводчика */}
       <line
@@ -432,10 +464,10 @@ const WindLevelGuide = () => (
 
 // Добавить после WindLevelGuide и перед ArtilleryCalculator
 const TriangulationCalculator = () => {
-  const [targetDistance, setTargetDistance] = useState('');
-  const [targetAzimuth, setTargetAzimuth] = useState('');
-  const [impactDistance, setImpactDistance] = useState('');
-  const [impactAzimuth, setImpactAzimuth] = useState('');
+  const [targetDistance, setTargetDistance] = useState('100');
+  const [targetAzimuth, setTargetAzimuth] = useState('180');
+  const [impactDistance, setImpactDistance] = useState('80');
+  const [impactAzimuth, setImpactAzimuth] = useState('90'); 
   const [artilleryType, setArtilleryType] = useState('120');
   const [windLevel, setWindLevel] = useState('0');
   const [windDirection, setWindDirection] = useState('0');
@@ -618,6 +650,7 @@ const TriangulationCalculator = () => {
             targetAzimuth={targetAzimuth}
             impactDistance={impactDistance}
             impactAzimuth={impactAzimuth}
+            windDirection={Number(windDirection)}
             result={result}
           />
         </div>
