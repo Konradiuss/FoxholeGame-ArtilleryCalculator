@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 function polarToCartesian(distance, azimuth) {
   const angleRad = (90 - azimuth) * Math.PI / 180;
@@ -310,30 +310,30 @@ const TriangulationMap = ({
 
       {/* Направление ветра - новый элемент */}
       <g transform={`rotate(${windDirection} 100 100)`}>
-        <line 
-          x1="100" 
-          y1="100" 
-          x2="100" 
+        <line
+          x1="100"
+          y1="100"
+          x2="100"
           y2="70"
-          stroke="#4682B4" 
-          strokeWidth="2" 
+          stroke="#4682B4"
+          strokeWidth="2"
           strokeDasharray="4"
-          markerEnd="url(#arrowhead)" 
+          markerEnd="url(#arrowhead)"
         />
       </g>
 
       {/* Добавляем определение маркера для стрелки */}
       <defs>
-        <marker 
-          id="arrowhead" 
-          markerWidth="10" 
+        <marker
+          id="arrowhead"
+          markerWidth="10"
           markerHeight="7"
-          refX="9" 
-          refY="3.5" 
+          refX="9"
+          refY="3.5"
           orient="auto"
         >
-          <polygon 
-            points="0 0, 10 3.5, 0 7" 
+          <polygon
+            points="0 0, 10 3.5, 0 7"
             fill="#4682B4"
           />
         </marker>
@@ -467,7 +467,7 @@ const TriangulationCalculator = () => {
   const [targetDistance, setTargetDistance] = useState('100');
   const [targetAzimuth, setTargetAzimuth] = useState('180');
   const [impactDistance, setImpactDistance] = useState('80');
-  const [impactAzimuth, setImpactAzimuth] = useState('90'); 
+  const [impactAzimuth, setImpactAzimuth] = useState('90');
   const [artilleryType, setArtilleryType] = useState('120');
   const [windLevel, setWindLevel] = useState('0');
   const [windDirection, setWindDirection] = useState('0');
@@ -737,18 +737,18 @@ const ArtilleryGroupCalculator = () => {
 
   const handleDrag = (e) => {
     if (!isDragging || !draggingArt) return;
-  
+
     const svg = e.currentTarget;
     const pt = new DOMPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
-    
+
     const svgMatrix = svg.getScreenCTM().inverse();
     const svgPoint = pt.matrixTransform(svgMatrix);
-    
+
     const roundedX = Math.round(svgPoint.x);
     const roundedY = Math.round(svgPoint.y);
-  
+
     if (roundedX >= 0 && roundedX <= GRID_SIZE_X && roundedY >= 0 && roundedY <= GRID_SIZE_Y) {
       setArtillery(artillery.map(art =>
         art.id === draggingArt.id
@@ -1109,24 +1109,139 @@ const ArtilleryGroupCalculator = () => {
   );
 };
 
-const ContactBlock = () => (
-  <div className="mt-8 flex flex-col items-center justify-center">
-    <div className="bg-[#0A0A0A] rounded-lg p-2"> {/* черный фон для изображения */}
-      <img
-        src="/buckshot_Dealer_2.png"
-        alt="Contact Author"
-        className="w-[146px] h-[175px] object-contain"
-      />
+
+const AnimatedText = ({ text }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveIndex((current) => (current + 1) % text.length);
+    }, 300); // Более медленная анимация для плавности
+
+    return () => clearInterval(interval);
+  }, [text.length]);
+
+  return (
+    <div className="relative">
+      {/* Основное облачко диалога */}
+      <div className="relative p-6 bg-gradient-to-b from-[#1A1614] to-[#2A2420] rounded-xl">
+        {/* Декоративная внешняя рамка */}
+        <div className="absolute inset-0 rounded-xl border-2 border-[#4A3C2E]" />
+        
+        {/* Декоративные углы */}
+        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-[#8B7355] rounded-tl-xl" />
+        <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-[#8B7355] rounded-tr-xl" />
+        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-[#8B7355] rounded-bl-xl" />
+        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-[#8B7355] rounded-br-xl" />
+
+        {/* Хвостик облачка в стиле комикса */}
+        <div className="absolute -left-8 top-1/2 transform -translate-y-1/2">
+          <svg width="32" height="32" viewBox="0 0 32 32">
+            <path
+              d="M32 16 L8 2 L16 16 L8 30 Z"
+              fill="#1A1614"
+              stroke="#4A3C2E"
+              strokeWidth="2"
+            />
+          </svg>
+        </div>
+
+        {/* Текст */}
+        <div className="relative z-10">
+          {text.split('').map((char, index) => (
+            <span
+              key={index}
+              className={`inline-block transition-all duration-500 ease-in-out ${
+                index === activeIndex ? 'transform -translate-y-2' : ''
+              }`}
+            >
+              {char === ' ' ? '\u00A0' : char}
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
-    <a
-      href="https://steamcommunity.com/profiles/76561198208667549/"
-      className="mt-4 px-6 py-2 bg-[#4A3C2E] text-[#8B7355] rounded-lg 
-                   hover:bg-[#6B4423] transition-colors font-medium"
+  );
+};
+
+const MadeByText = () => (
+  <div className="relative">
+    {/* Основная панель со стрелкой */}
+    <svg
+      width="320"  // Увеличил с 280 до 320
+      height="60"
+      viewBox="0 0 320 60"  // Увеличил viewBox соответственно
+      className="drop-shadow-md"
     >
-      Связаться с автором
-    </a>
+      {/* Основной фон */}
+      <path
+        d="M 0,10 
+           Q 0,0 10,0
+           H 280        
+           L 310,30     
+           L 280,60     
+           H 10
+           Q 0,60 0,50
+           V 10
+           Z"
+        fill="#1A1614"
+      />
+      
+      {/* Граница */}
+      <path
+        d="M 10,2
+           H 278.5      
+           L 308.5,30   
+           L 278.5,58   
+           H 10
+           Q 2,58 2,50
+           V 10
+           Q 2,2 10,2"
+        stroke="#4A3C2E"
+        strokeWidth="2"
+        fill="none"
+      />
+    </svg>
+
+    {/* Текст внутри панели */}
+    <div className="absolute inset-0 flex items-center pl-5">
+      <span className="text-[#8B7355] text-xl font-bold whitespace-nowrap">
+        MADE BY THIS MADMAN
+      </span>
+    </div>
   </div>
 );
+
+const ContactBlock = () => (
+  <div className="mt-8 bg-black rounded-lg p-8">
+    <div className="flex items-center justify-between gap-12">
+      {/* Левая часть */}
+      <MadeByText />
+
+      {/* Центральная часть с изображением */}
+      <div className="flex-shrink-0 relative z-10">
+        <a
+          href="https://steamcommunity.com/profiles/76561198208667549/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="cursor-pointer block transition-transform hover:scale-105 duration-300"
+        >
+          <img
+            src="/buckshot_Dealer_2.png"
+            alt="Dealer with Mortar"
+            className="w-[146px] h-[175px] object-contain"
+          />
+        </a>
+      </div>
+
+      {/* Правая часть */}
+      <div className="flex-grow max-w-xl">
+        <AnimatedText text="I INSERT THE MORTAR SHELLS IN AN UNKNOWN ORDER" />
+      </div>
+    </div>
+  </div>
+);
+
 
 const ArtilleryCalculator = () => {
   const [calculatorMode, setCalculatorMode] = useState('direct');
